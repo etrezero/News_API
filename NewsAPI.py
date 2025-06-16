@@ -99,7 +99,7 @@ def summarize_news_with_gpt(news_items):
 # 앱 초기화 및 테마 설정
 # -----------------------------
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
-app.title = "📄 뉴스 요약 대시보드"
+app.title = "📄 Covenant 뉴스"
 
 language_options = [
     {"label": "🇰🇷 한국어", "value": "ko"},
