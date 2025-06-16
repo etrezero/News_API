@@ -1,251 +1,151 @@
-
-import requests
-from datetime import datetime, timedelta
-import yaml
-from pathlib import Path
-import urllib3
-
-import dash
-from dash import dcc, html
-from dash.dependencies import Input, Output, State
-import dash_bootstrap_components as dbc
-
 import os
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-# -----------------------------
-# 뉴스 API 함수
-# -----------------------------
-def fetch_news_articles(start_date, end_date, keyword="경제", language="ko", page_size=10):
-
-    from dotenv import load_dotenv
-    load_dotenv()
-
-    api_key = os.getenv("NEWS_API_KEY")  # 환경변수에서 API 키를 읽음
-
-    today = datetime.today()
-    start = max(datetime.strptime(start_date, "%Y-%m-%d"), today - timedelta(days=29))
-    end = min(datetime.strptime(end_date, "%Y-%m-%d"), today)
-
-    url = (
-        f"https://newsapi.org/v2/everything"
-        f"?q={keyword}"
-        f"&from={start.strftime('%Y-%m-%d')}"
-        f"&to={end.strftime('%Y-%m-%d')}"
-        f"&sortBy=publishedAt"
-        f"&language={language}"
-        f"&pageSize={page_size}"
-        f"&apiKey={api_key}"
-    )
-
-    try:
-        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, verify=False)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        return f"❌ 오류 발생: {e}"
-
-    articles = response.json().get('articles', [])
-    news_data = []
-    for article in articles:
-        title = article.get('title')
-        link = article.get('url')
-        if title and link:
-            news_data.append({"title": title, "url": link})
-    return news_data
-
-
-
-
-
+import base64
+import requests
+import yaml
 import openai
-openai.api_key = os.getenv("OPENAI_API_KEY")
+import re
+from pathlib import Path
+from dash import Dash, html, dcc, Input, Output, State
+from urllib.parse import quote
+from google.cloud import texttospeech
+import dash_bootstrap_components as dbc
+from PIL import Image
+from datetime import datetime
+from flask import send_from_directory
 
-def summarize_news_with_gpt(news_items):
-    if not news_items:
-        return "뉴스가 없습니다."
+# ---------------- 설정 ----------------
+BASE_DIR = Path("D:/code")
+CONFIG_PATH = BASE_DIR / "config.yaml"
+OUTPUT_DIR = BASE_DIR / "output"
+ASSETS_DIR = BASE_DIR / "assets"
+OUTPUT_DIR.mkdir(exist_ok=True)
+ASSETS_DIR.mkdir(exist_ok=True)
 
-    prompt_text = "\n".join(f"- {item['title']}" for item in news_items)
+with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+    config = yaml.safe_load(f)
 
+openai.api_key = config["openai_api_key"]
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(config["google_service_account"])
+NEWSAPI_KEY = config["newsapi_key"]
 
-    system_prompt = (
-        "너는 숙련된 뉴스 편집자야.\n"
-        "아래에 제시된 여러 뉴스 기사 제목들과 URL에 포함된 텍스트를 활용하지만, 단순히 나열하지 말고, "
-        "전체적인 배경, 흐름, 인과관계, 시사점을 중심으로 하나의 줄거리처럼 연결해서 요약해줘.\n\n"
-        "- 기사 간 주제 흐름이나 시점 변화가 자연스럽게 이어지게 구성하고,\n"
-        "- 요약 분량은 1500자 이내로 제한하며,\n"
-        "- 날짜, 출처, 숫자 인용은 생략해도 좋고 흐름을 해치지 않게 서술해.\n"
-        "- 마치 저널리스트가 하나의 기사로 작성하듯 자연스럽게 정리해줘.\n\n"
-        "형식은 간결하고 연결된 문장 중심으로, 핵심 흐름을 독자가 한 번에 파악할 수 있도록 작성해."
+# GPT 클라이언트
+from openai import OpenAI
+client = OpenAI(api_key=config["openai_api_key"])
+
+# ---------------- 뉴스 요약 및 음성 생성 ----------------
+def fetch_news_headlines():
+    url = "https://newsapi.org/v2/top-headlines"
+    params = {'category': 'business', 'language': 'en', 'pageSize': 30, 'apiKey': NEWSAPI_KEY}
+    r = requests.get(url, params=params)
+    articles = r.json().get('articles', [])
+    return [{'label': a['title'], 'value': a['description'], 'title': a['title']} for a in articles if a.get('description')]
+
+def is_english(text):
+    return len(re.findall(r'[a-zA-Z]', text)) > len(re.findall(r'[가-힣]', text))
+
+def summarize_with_gpt(text):
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "system", "content": "뉴스의 핵심 내용, 배경 맥락, 요점을 3문장으로 한국어로 요약해줘."},
+                  {"role": "user", "content": text}]
     )
+    return response.choices[0].message.content.strip()
 
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt_text}
-            ],
-            max_tokens=1000,
-            temperature=0.7,
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return f"❌ 요약 중 오류 발생: {e}"
+def summarize_and_translate_if_needed(news_option):
+    title = news_option.get('title', '제목 없음')
+    description = news_option.get('value', '')
+    translated_title = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "system", "content": "Translate this English news headline into natural Korean."},
+                  {"role": "user", "content": title}]
+    ).choices[0].message.content.strip()
+    full_text = f"{title}\n{description}"
+    summary = summarize_with_gpt(full_text)
+    return f"#{translated_title}\n{summary}"
 
+def summarize_selected_news(news_list):
+    summaries = []
+    for news in news_list:
+        try:
+            summary = summarize_and_translate_if_needed(news)
+            summaries.append(summary)
+        except Exception as e:
+            summaries.append(f"❌ 요약 실패: {e}")
+    return "커버넌트 뉴스\n\n" + "\n\n".join(summaries)
 
+def generate_voice(text, output_path, voice_name, speaking_rate):
+    client_tts = texttospeech.TextToSpeechClient()
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+    voice = texttospeech.VoiceSelectionParams(language_code="ko-KR", name=voice_name)
+    audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.MP3, speaking_rate=speaking_rate)
+    response = client_tts.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
+    with open(output_path, "wb") as out:
+        out.write(response.audio_content)
 
-# -----------------------------
-# 앱 초기화 및 테마 설정
-# -----------------------------
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
-app.title = "📄 뉴스 요약 대시보드"
+def today():
+    return datetime.now().strftime("%Y-%m-%d %H")
 
-language_options = [
-    {"label": "🇰🇷 한국어", "value": "ko"},
-    {"label": "🇺🇸 영어", "value": "en"},
-    {"label": "🇯🇵 일본어", "value": "ja"},
-    {"label": "🇨🇳 중국어", "value": "zh"},
-    {"label": "🇩🇪 독일어", "value": "de"},
-]
+# ---------------- Dash 앱 구성 ----------------
+app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app.title = "뉴스 요약 음성 앱"
 
-# -----------------------------
-# 레이아웃
-# -----------------------------
-app.layout = dbc.Container([
-    
-    # 🔹 제목
-    dbc.Row([
-        dbc.Col(html.H2("📰 뉴스 검색 대시보드", className="text-center my-4"), width=12)
-    ]),
+app.layout = html.Div([
+    html.H2("📰 GPT 뉴스 요약 + 음성 미리듣기"),
 
-    # 🔹 검색 조건 입력 카드
-    dbc.Card([
-        dbc.CardBody([
-            dbc.Row([
-                dbc.Col([
-                    dbc.Label("🔍 검색어"),
-                    dcc.Input(
-                        id="input-keyword",
-                        type="text",
-                        value="관세",
-                        className="form-control",
-                        placeholder="예: 반도체, 금리"
-                    )
-                ], md=6),
+    html.H4("1️⃣ 뉴스 제목 선택"),
+    dcc.Dropdown(id="news-dropdown", options=[], multi=True, placeholder="뉴스 제목 선택"),
+    html.Button("📰 뉴스 새로고침", id="refresh-news", n_clicks=0, style={"marginBottom": "10px"}),
+    html.Button("🧠 GPT로 뉴스 요약 반영", id="summarize-news", n_clicks=0, style={"marginBottom": "20px"}),
 
-                dbc.Col([
-                    dbc.Label("🌐 언어"),
-                    dcc.Dropdown(
-                        id="language-select",
-                        options=[
-                            {"label": "🇰🇷 한국어", "value": "ko"},
-                            {"label": "🇺🇸 영어", "value": "en"},
-                            {"label": "🇯🇵 일본어", "value": "ja"},
-                            {"label": "🇨🇳 중국어", "value": "zh"},
-                            {"label": "🇩🇪 독일어", "value": "de"},
-                        ],
-                        value="ko",
-                        className="form-control"
-                    )
-                ], md=3),
+    html.H4("2️⃣ 텍스트 입력"),
+    dcc.Textarea(id='text-input', style={'width': '100%', 'height': 200}),
 
-                dbc.Col([
-                    dbc.Label("📄 기사 수"),
-                    dcc.Input(
-                        id="page-size",
-                        type="number",
-                        min=1,
-                        max=100,
-                        value=10,
-                        step=1,
-                        className="form-control"
-                    )
-                ], md=3)
-            ], className="mb-3"),
+    html.H4("3️⃣ 음성 설정"),
+    dcc.Dropdown(id='voice-selector', options=[
+        {"label": "Standard 남성", "value": "ko-KR-Standard-D"},
+        {"label": "Neural2 여성", "value": "ko-KR-Neural2-B"}
+    ], value="ko-KR-Standard-D", style={"width": "50%"}),
+    dcc.Slider(id='speed-slider', min=0.5, max=1.5, step=0.05, value=1.2, marks={0.5: "느림", 1.0: "보통", 1.5: "빠름"}),
 
-            dbc.Row([
-                dbc.Col(
-                    dbc.Button("검색", id="search-button", color="primary", className="w-100"),
-                    md=3
-                ),
-            ], justify="end")
-        ])
-    ], className="mb-4"),
+    html.H4("🔊 GPT 요약 음성 미리듣기"),
+    html.Div(id='audio-preview', style={"marginBottom": "20px"})
+], style={"width": "70%", "margin": "auto"})
 
-    
-    # 🔹 결과 영역 (전체 검색뉴스 요약 + 뉴스 리스트가 이 영역에 출력됨)
-    dbc.Row([
-        dbc.Col([
-           dcc.Loading(
-            id="loading",
-            type="circle",
-            color="#0d6efd",
-            children=html.Div(
-                id="news-output",
-                children="📰 기사 요약중...",  # ✅ 로딩 중 기본 텍스트
-                style={"marginTop": "20px", "fontStyle": "italic", "color": "#888"}
-            )
-        )
+@app.server.route("/output/<path:filename>")
+def serve_output_file(filename):
+    return send_from_directory(OUTPUT_DIR, filename)
 
-        ], width=12)
-    ])
-
-], fluid=True)  # ✅ 닫는 괄호가 이 위치에 필요합니다
-
-
-# -----------------------------
-# 콜백
-# -----------------------------
 @app.callback(
-    Output("news-output", "children"),
-    Input("search-button", "n_clicks"),
-    State("input-keyword", "value"),
-    State("language-select", "value"),
-    State("page-size", "value"),
+    Output("news-dropdown", "options"),
+    Input("refresh-news", "n_clicks")
 )
-def update_news(n_clicks, keyword, language, page_size):
-    if not keyword:
-        return dbc.Alert("❌ 검색어를 입력해주세요.", color="danger")
+def refresh_news(n_clicks):
+    return fetch_news_headlines()
 
-    today = datetime.today()
-    start_date = (today - timedelta(14)).strftime("%Y-%m-%d")
-    end_date = today.strftime("%Y-%m-%d")
+@app.callback(
+    Output('text-input', 'value'),
+    Output('audio-preview', 'children'),
+    Input('summarize-news', 'n_clicks'),
+    State('news-dropdown', 'value'),
+    State('news-dropdown', 'options'),
+    State('voice-selector', 'value'),
+    State('speed-slider', 'value')
+)
+def update_text_from_news(n, selected_values, all_options, voice_name, speed):
+    if not selected_values:
+        return "커버넌트 뉴스\n", "뉴스를 먼저 선택해주세요."
+    news_objs = [opt for opt in all_options if opt['value'] in selected_values]
+    summary = summarize_selected_news(news_objs)
 
-    # 뉴스 데이터 가져오기
-    news_data = fetch_news_articles(start_date, end_date, keyword, language, page_size)
+    voice_path = OUTPUT_DIR / "gpt_summary_voice.mp3"
+    try:
+        generate_voice(summary, voice_path, voice_name, speed)
+        encoded = quote(voice_path.name)
+        audio_player = html.Audio(src=f"/output/{encoded}", controls=True, autoPlay=True)
+    except Exception as e:
+        audio_player = f"❌ 음성 생성 실패: {e}"
 
-    if isinstance(news_data, str):
-        return dbc.Alert(news_data, color="danger")
+    return summary, audio_player
 
-    if news_data:
-        # ✅ GPT 요약 생성
-        gpt_summary = summarize_news_with_gpt(news_data)
-
-        return html.Div([
-            # 🔷 GPT 요약 박스
-            dbc.Card([
-                dbc.CardBody([
-                    html.H5("📝 GPT 줄거리 요약", className="card-title"),
-                    html.P(gpt_summary, style={"whiteSpace": "pre-wrap", "fontSize": "1rem"})
-                ])
-            ], className="mb-4"),
-
-            # 🔷 뉴스 리스트 유지
-            dbc.ListGroup([
-                dbc.ListGroupItem([
-                    html.H5(item['title'], className="mb-1"),
-                    html.A("📎 자세히 보기", href=item['url'], target="_blank", className="text-primary")
-                ]) for item in news_data
-            ])
-        ])
-    
-    else:
-        return dbc.Alert("❌ 관련 뉴스가 없습니다.", color="warning")
-
-
-
-
-# -----------------------------
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=False, host="0.0.0.0", port=8050)
