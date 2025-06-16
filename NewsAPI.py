@@ -59,26 +59,24 @@ def fetch_news_articles(start_date, end_date, keyword="경제", language="ko", p
 
 
 
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def summarize_news_with_gpt(news_items):
-    
-    import openai
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    
     if not news_items:
         return "뉴스가 없습니다."
 
-    # 뉴스 제목들을 줄거리처럼 연결
     prompt_text = "\n".join(f"- {item['title']}" for item in news_items)
 
     system_prompt = (
-        "너는 뉴스 편집자야. 아래 뉴스 기사 제목과 url을 바탕으로, "
+        "너는 뉴스 편집자야. 아래 뉴스 기사 제목들과 URL을 바탕으로 해당기사 텍스트활용해서, "
         "전체적인 시사 흐름과 주요 내용을 줄거리처럼 1500자 이내로 요약해줘. "
         "날짜나 출처는 생략하고 주제 흐름만 부드럽게 설명해."
     )
 
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -87,9 +85,7 @@ def summarize_news_with_gpt(news_items):
             max_tokens=1000,
             temperature=0.7,
         )
-        summary = response.choices[0].message.content.strip()
-        return summary
-
+        return response.choices[0].message.content.strip()
     except Exception as e:
         return f"❌ 요약 중 오류 발생: {e}"
 
@@ -174,7 +170,7 @@ app.layout = dbc.Container([
         ])
     ], className="mb-4"),
 
-    # 🔹 결과 영역 (GPT 요약 + 뉴스 리스트가 이 영역에 출력됨)
+    # 🔹 결과 영역 (전체 검색뉴스 요약 + 뉴스 리스트가 이 영역에 출력됨)
     dbc.Row([
         dbc.Col([
             html.Div(id="news-output")
