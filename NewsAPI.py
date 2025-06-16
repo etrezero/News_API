@@ -114,40 +114,73 @@ language_options = [
 # 레이아웃
 # -----------------------------
 app.layout = dbc.Container([
+    
+    # 🔹 제목
     dbc.Row([
         dbc.Col(html.H2("📰 뉴스 검색 대시보드", className="text-center my-4"), width=12)
     ]),
-    
+
+    # 🔹 검색 조건 입력 카드
     dbc.Card([
         dbc.CardBody([
             dbc.Row([
                 dbc.Col([
                     dbc.Label("🔍 검색어"),
-                    dcc.Input(id="input-keyword", type="text", value="관세", className="form-control", placeholder="예: 반도체, 금리")
+                    dcc.Input(
+                        id="input-keyword",
+                        type="text",
+                        value="관세",
+                        className="form-control",
+                        placeholder="예: 반도체, 금리"
+                    )
                 ], md=6),
 
                 dbc.Col([
                     dbc.Label("🌐 언어"),
-                    dcc.Dropdown(id="language-select", options=language_options, value="ko", className="form-control")
+                    dcc.Dropdown(
+                        id="language-select",
+                        options=[
+                            {"label": "🇰🇷 한국어", "value": "ko"},
+                            {"label": "🇺🇸 영어", "value": "en"},
+                            {"label": "🇯🇵 일본어", "value": "ja"},
+                            {"label": "🇨🇳 중국어", "value": "zh"},
+                            {"label": "🇩🇪 독일어", "value": "de"},
+                        ],
+                        value="ko",
+                        className="form-control"
+                    )
                 ], md=3),
 
                 dbc.Col([
                     dbc.Label("📄 기사 수"),
-                    dcc.Input(id="page-size", type="number", min=1, max=100, value=10, step=1, className="form-control")
+                    dcc.Input(
+                        id="page-size",
+                        type="number",
+                        min=1,
+                        max=100,
+                        value=10,
+                        step=1,
+                        className="form-control"
+                    )
                 ], md=3)
             ], className="mb-3"),
 
             dbc.Row([
-                dbc.Col(dbc.Button("검색", id="search-button", color="primary", className="w-100"), md=3),
+                dbc.Col(
+                    dbc.Button("검색", id="search-button", color="primary", className="w-100"),
+                    md=3
+                ),
             ], justify="end")
         ])
     ], className="mb-4"),
 
+    # 🔹 결과 영역 (GPT 요약 + 뉴스 리스트가 이 영역에 출력됨)
     dbc.Row([
         dbc.Col([
             html.Div(id="news-output")
-        ])
+        ], width=12)
     ])
+
 ], fluid=True)
 
 
