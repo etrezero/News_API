@@ -226,7 +226,7 @@ def update_news(n_clicks, keyword, language, page_size):
             # 🔷 GPT 요약 박스
             dbc.Card([
                 dbc.CardBody([
-                    html.H5("📝 GPT 줄거리 요약", className="card-title"),
+                    html.H5("📝 Covenant News 요약", className="card-title"),
                     html.P(gpt_summary, style={"whiteSpace": "pre-wrap", "fontSize": "1rem"})
                 ])
             ], className="mb-4"),
