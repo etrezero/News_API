@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: news-api-dashboard
+    env: docker
+    plan: free
+    branch: main
+    repo: https://github.com/etrezero/News_API
