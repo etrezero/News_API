@@ -145,7 +145,7 @@ app.layout = dbc.Container([
                             {"label": "🇨🇳 중국어", "value": "zh"},
                             {"label": "🇩🇪 독일어", "value": "de"},
                         ],
-                        value="us",
+                        value="en",
                         className="form-control"
                     )
                 ], md=3),
