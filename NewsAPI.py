@@ -1,4 +1,4 @@
-import pandas as pd
+
 import requests
 from datetime import datetime, timedelta
 import yaml
@@ -9,6 +9,8 @@ import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
+
+import os
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
