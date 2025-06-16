@@ -56,7 +56,15 @@ def fetch_news_articles(start_date, end_date, keyword="경제", language="ko", p
 
 
 
+
+
+
+
 def summarize_news_with_gpt(news_items):
+    
+    import openai
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+    
     if not news_items:
         return "뉴스가 없습니다."
 
