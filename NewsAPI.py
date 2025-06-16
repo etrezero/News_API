@@ -116,7 +116,7 @@ app.layout = dbc.Container([
     
     # 🔹 제목
     dbc.Row([
-        dbc.Col(html.H2("📰 뉴스 검색 대시보드", className="text-center my-4"), width=12)
+        dbc.Col(html.H2("📰 Covenant 뉴스 검색/요약", className="text-center my-4"), width=12)
     ]),
 
     # 🔹 검색 조건 입력 카드
