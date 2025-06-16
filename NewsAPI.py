@@ -30,7 +30,7 @@ def fetch_news_articles(start_date, end_date, keyword="경제", language="ko", p
 
     url = (
         f"https://newsapi.org/v2/everything"
-        f"?q={keyword}"
+        f"?q=\"{keyword}\""
         f"&from={start.strftime('%Y-%m-%d')}"
         f"&to={end.strftime('%Y-%m-%d')}"
         f"&sortBy=publishedAt"
