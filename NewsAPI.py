@@ -179,6 +179,7 @@ app.layout = dbc.Container([
     ], width=12)
 ])
 
+], fluid=True)  # ✅ 닫는 괄호가 이 위치에 필요합니다
 
 
 # -----------------------------
