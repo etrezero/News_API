@@ -58,10 +58,8 @@ def fetch_news_articles(start_date, end_date, keyword="경제", language="ko", p
 
 
 
-
-from openai import OpenAI
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+import openai
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def summarize_news_with_gpt(news_items):
     if not news_items:
@@ -70,13 +68,13 @@ def summarize_news_with_gpt(news_items):
     prompt_text = "\n".join(f"- {item['title']}" for item in news_items)
 
     system_prompt = (
-        "너는 뉴스 편집자야. 아래 뉴스 기사 제목들과 URL을 바탕으로 해당기사 텍스트활용해서, "
+        "너는 뉴스 편집자야. 아래 뉴스 기사 제목들을 바탕으로, "
         "전체적인 시사 흐름과 주요 내용을 줄거리처럼 1500자 이내로 요약해줘. "
         "날짜나 출처는 생략하고 주제 흐름만 부드럽게 설명해."
     )
 
     try:
-        response = client.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -88,7 +86,6 @@ def summarize_news_with_gpt(news_items):
         return response.choices[0].message.content.strip()
     except Exception as e:
         return f"❌ 요약 중 오류 발생: {e}"
-
 
 
 
