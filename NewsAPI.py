@@ -55,6 +55,39 @@ def fetch_news_articles(start_date, end_date, keyword="경제", language="ko", p
     return news_data
 
 
+
+def summarize_news_with_gpt(news_items):
+    if not news_items:
+        return "뉴스가 없습니다."
+
+    # 뉴스 제목들을 줄거리처럼 연결
+    prompt_text = "\n".join(f"- {item['title']}" for item in news_items)
+
+    system_prompt = (
+        "너는 뉴스 편집자야. 아래 뉴스 기사 제목과 url을 바탕으로, "
+        "전체적인 시사 흐름과 주요 내용을 줄거리처럼 1500자 이내로 요약해줘. "
+        "날짜나 출처는 생략하고 주제 흐름만 부드럽게 설명해."
+    )
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt_text}
+            ],
+            max_tokens=1000,
+            temperature=0.7,
+        )
+        summary = response.choices[0].message.content.strip()
+        return summary
+
+    except Exception as e:
+        return f"❌ 요약 중 오류 발생: {e}"
+
+
+
+
 # -----------------------------
 # 앱 초기화 및 테마 설정
 # -----------------------------
@@ -128,20 +161,38 @@ def update_news(n_clicks, keyword, language, page_size):
     start_date = (today - timedelta(14)).strftime("%Y-%m-%d")
     end_date = today.strftime("%Y-%m-%d")
 
+    # 뉴스 데이터 가져오기
     news_data = fetch_news_articles(start_date, end_date, keyword, language, page_size)
 
     if isinstance(news_data, str):
         return dbc.Alert(news_data, color="danger")
 
     if news_data:
-        return dbc.ListGroup([
-            dbc.ListGroupItem([
-                html.H5(item['title'], className="mb-1"),
-                html.A("📎 자세히 보기", href=item['url'], target="_blank", className="text-primary")
-            ]) for item in news_data
+        # ✅ GPT 요약 생성
+        gpt_summary = summarize_news_with_gpt(news_data)
+
+        return html.Div([
+            # 🔷 GPT 요약 박스
+            dbc.Card([
+                dbc.CardBody([
+                    html.H5("📝 GPT 줄거리 요약", className="card-title"),
+                    html.P(gpt_summary, style={"whiteSpace": "pre-wrap", "fontSize": "1rem"})
+                ])
+            ], className="mb-4"),
+
+            # 🔷 뉴스 리스트 유지
+            dbc.ListGroup([
+                dbc.ListGroupItem([
+                    html.H5(item['title'], className="mb-1"),
+                    html.A("📎 자세히 보기", href=item['url'], target="_blank", className="text-primary")
+                ]) for item in news_data
+            ])
         ])
+    
     else:
         return dbc.Alert("❌ 관련 뉴스가 없습니다.", color="warning")
+
+
 
 
 # -----------------------------
