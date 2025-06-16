@@ -167,17 +167,23 @@ app.layout = dbc.Container([
         ])
     ], className="mb-4"),
 
+    
     # 🔹 결과 영역 (전체 검색뉴스 요약 + 뉴스 리스트가 이 영역에 출력됨)
-  dbc.Row([
-    dbc.Col([
-        dcc.Loading(
+    dbc.Row([
+        dbc.Col([
+           dcc.Loading(
             id="loading",
             type="circle",
             color="#0d6efd",
-            children=html.Div(id="news-output")
+            children=html.Div(
+                id="news-output",
+                children="📰 기사 요약중...",  # ✅ 로딩 중 기본 텍스트
+                style={"marginTop": "20px", "fontStyle": "italic", "color": "#888"}
+            )
         )
-    ], width=12)
-])
+
+        ], width=12)
+    ])
 
 ], fluid=True)  # ✅ 닫는 괄호가 이 위치에 필요합니다
 
