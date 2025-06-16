@@ -128,7 +128,7 @@ app.layout = dbc.Container([
                     dcc.Input(
                         id="input-keyword",
                         type="text",
-                        value="FED",
+                        value="반도체",
                         className="form-control",
                         placeholder="예: 반도체, 금리"
                     )
@@ -145,7 +145,7 @@ app.layout = dbc.Container([
                             {"label": "🇨🇳 중국어", "value": "zh"},
                             {"label": "🇩🇪 독일어", "value": "de"},
                         ],
-                        value="en",
+                        value="ko",
                         className="form-control"
                     )
                 ], md=3),
