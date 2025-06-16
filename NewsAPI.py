@@ -168,13 +168,17 @@ app.layout = dbc.Container([
     ], className="mb-4"),
 
     # 🔹 결과 영역 (전체 검색뉴스 요약 + 뉴스 리스트가 이 영역에 출력됨)
-    dbc.Row([
-        dbc.Col([
-            html.Div(id="news-output")
-        ], width=12)
-    ])
+  dbc.Row([
+    dbc.Col([
+        dcc.Loading(
+            id="loading",
+            type="circle",
+            color="#0d6efd",
+            children=html.Div(id="news-output")
+        )
+    ], width=12)
+])
 
-], fluid=True)
 
 
 # -----------------------------
